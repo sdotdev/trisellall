@@ -1,7 +1,12 @@
+import type { Metadata } from 'next'
 import { requireWorkspace } from '@/lib/auth'
 import { adminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import Image from 'next/image'
+
+export const metadata: Metadata = {
+  title: 'Alerts',
+}
 
 const sourceBadge: Record<string, string> = {
   vinted: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400',

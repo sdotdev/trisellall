@@ -1,7 +1,12 @@
+import type { Metadata } from 'next'
 import { requireWorkspace } from '@/lib/auth'
 import { adminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
+
+export const metadata: Metadata = {
+  title: 'Settings',
+}
 
 async function restartTour() {
   'use server'

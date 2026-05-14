@@ -1,9 +1,14 @@
+import type { Metadata } from 'next'
 import { requireWorkspace } from '@/lib/auth'
 import { canCreateWatch } from '@/lib/billing'
 import { fetchGuildChannels } from '@/lib/discord'
 import { adminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
+
+export const metadata: Metadata = {
+  title: 'New Watch',
+}
 
 async function createWatch(formData: FormData) {
   'use server'

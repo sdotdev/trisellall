@@ -1,8 +1,13 @@
+import type { Metadata } from 'next'
 import { requireWorkspace } from '@/lib/auth'
 import { fetchGuildChannels } from '@/lib/discord'
 import { adminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
+
+export const metadata: Metadata = {
+  title: 'Edit Watch',
+}
 
 async function updateWatch(watchId: string, formData: FormData) {
   'use server'

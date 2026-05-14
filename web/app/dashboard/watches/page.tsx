@@ -1,6 +1,11 @@
+import type { Metadata } from 'next'
 import { requireWorkspace } from '@/lib/auth'
 import { adminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
+
+export const metadata: Metadata = {
+  title: 'Watches',
+}
 
 const statusColors: Record<string, string> = {
   active: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',

@@ -31,7 +31,7 @@ export async function middleware(request: NextRequest) {
   const isPublicApi = pathname.startsWith('/api/discord/interactions') ||
     pathname.startsWith('/api/webhooks/')
 
-  if (!user && !pathname.startsWith('/login') && !pathname.startsWith('/auth') && !isPublicApi) {
+  if (!user && !pathname.startsWith('/login') && !pathname.startsWith('/auth') && !isPublicApi && pathname !== '/') {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)

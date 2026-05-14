@@ -1,9 +1,14 @@
+import type { Metadata } from 'next'
 import { requireWorkspace } from '@/lib/auth'
 import { adminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import Image from 'next/image'
 import { notFound, redirect } from 'next/navigation'
 import TestAlertButton from './TestAlertButton'
+
+export const metadata: Metadata = {
+  title: 'Watch',
+}
 
 async function pauseWatch(watchId: string) {
   'use server'

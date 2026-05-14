@@ -1,5 +1,10 @@
+import type { Metadata } from 'next'
 import { requireWorkspace } from '@/lib/auth'
 import { getSubscription, isTrialActive } from '@/lib/billing'
+
+export const metadata: Metadata = {
+  title: 'Billing',
+}
 
 const statusLabel: Record<string, string> = {
   active: 'Active',
