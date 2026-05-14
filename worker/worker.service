@@ -1,0 +1,14 @@
+[Unit]
+Description=MVP Worker
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/ubuntu/worker
+ExecStart=/usr/bin/node --import tsx/esm src/index.ts
+Restart=always
+RestartSec=5
+EnvironmentFile=/home/ubuntu/worker/.env
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "mcp__claude_ai_Supabase__list_projects",
+      "mcp__claude_ai_Supabase__list_organizations",
+      "mcp__claude_ai_Supabase__list_tables",
+      "mcp__claude_ai_Supabase__get_cost",
+      "mcp__claude_ai_Supabase__confirm_cost",
+      "mcp__claude_ai_Supabase__create_project",
+      "mcp__claude_ai_Supabase__get_project_url",
+      "mcp__claude_ai_Supabase__get_publishable_keys",
+      "mcp__claude_ai_Supabase__apply_migration",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\Public\\\\_sites\\\\2026\\\\2026.17\\\\web\" -Recurse -Directory | Where-Object {$_.Name -ne \"node_modules\"} | ForEach-Object {$_.FullName} | Sort-Object)",
+      "mcp__plugin_context7_context7__query-docs",
+      "Bash(node -e \"const s = require\\('stripe'\\); console.log\\(s.version\\)\")",
+      "mcp__claude_ai_Supabase__execute_sql",
+      "Bash(Get-ChildItem *)",
+      "Bash(npx vitest *)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Select-Object FullName)",
+      "Bash(Sort-Object FullName)",
+      "Bash(node *)"
+    ]
+  }
+}
