@@ -5,9 +5,22 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { notFound, redirect } from 'next/navigation'
 import TestAlertButton from './TestAlertButton'
+import ConfirmDeleteButton from '@/components/ConfirmDeleteButton'
+import ToastOnMount from '@/components/ToastOnMount'
 
-export const metadata: Metadata = {
-  title: 'Watch',
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params
+  const { workspace } = await requireWorkspace()
+  const { data: watch } = await adminClient()
+    .from('watches')
+    .select('name')
+    .eq('id', id)
+    .eq('workspace_id', workspace.id)
+    .single()
+
+  return {
+    title: watch?.name ?? 'Watch',
+  }
 }
 
 async function pauseWatch(watchId: string) {
@@ -35,8 +48,17 @@ const statusColors: Record<string, string> = {
   rate_limited: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
 }
 
-export default async function WatchDetailPage({ params }: { params: Promise<{ id: string }> }) {
+const ALERTS_PER_PAGE = 20
+
+export default async function WatchDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ alerts_page?: string; runs_page?: string; updated?: string }>
+}) {
   const { id } = await params
+  const sp = await searchParams
   const { workspace } = await requireWorkspace()
   const db = adminClient()
 
@@ -49,22 +71,37 @@ export default async function WatchDetailPage({ params }: { params: Promise<{ id
 
   if (!watch) notFound()
 
-  const [{ data: alerts }, { data: runs }] = await Promise.all([
+  const alertsPage = Math.max(1, Number(sp.alerts_page) || 1)
+  const runsPage = Math.max(1, Number(sp.runs_page) || 1)
+
+  const alertsFrom = (alertsPage - 1) * ALERTS_PER_PAGE
+
+  const [{ data: alerts, count: alertsTotal }, { data: runs, count: runsTotal }] = await Promise.all([
     db.from('alerts')
-      .select('id, sent_at, listing_snapshots(title, price, currency, location, listing_url, image_url, posted_at)')
+      .select('id, sent_at, listing_snapshots(title, price, currency, location, listing_url, image_url, posted_at)', { count: 'exact' })
       .eq('watch_id', id)
       .order('sent_at', { ascending: false })
-      .limit(20),
+      .range(alertsFrom, alertsFrom + ALERTS_PER_PAGE - 1),
     db.from('worker_runs')
-      .select('id, started_at, status, listings_found, alerts_sent, error_message')
+      .select('id, started_at, status, listings_found, alerts_sent, error_message', { count: 'exact' })
       .eq('watch_id', id)
       .order('started_at', { ascending: false })
-      .limit(10),
+      .range(0, 9),
   ])
+
+  const alertsTotalPages = Math.ceil((alertsTotal ?? 0) / ALERTS_PER_PAGE)
 
   const pauseWithId = pauseWatch.bind(null, id)
   const resumeWithId = resumeWatch.bind(null, id)
   const deleteWithId = deleteWatch.bind(null, id)
+
+  function alertsQs(page: number) {
+    const p: Record<string, string> = {}
+    if (page > 1) p.alerts_page = String(page)
+    if (runsPage > 1) p.runs_page = String(runsPage)
+    const entries = Object.entries(p)
+    return entries.length ? '?' + new URLSearchParams(entries).toString() : ''
+  }
 
   return (
     <div className="flex flex-col gap-8 p-8">
@@ -73,9 +110,9 @@ export default async function WatchDetailPage({ params }: { params: Promise<{ id
           <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">{watch.name}</h1>
           <p className="text-sm text-zinc-400">{watch.query} · {watch.source}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusColors[watch.status] ?? ''}`}>
-            {watch.status}
+            {watch.status === 'rate_limited' ? 'rate limited' : watch.status}
           </span>
           {watch.discord_channel_id && (
             <TestAlertButton channelId={watch.discord_channel_id} />
@@ -94,100 +131,124 @@ export default async function WatchDetailPage({ params }: { params: Promise<{ id
               {watch.status === 'active' ? 'Pause' : 'Resume'}
             </button>
           </form>
-          <form action={deleteWithId}>
-            <button
-              type="submit"
-              className="rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30"
-            >
-              Delete
-            </button>
-          </form>
+          <ConfirmDeleteButton action={deleteWithId} />
         </div>
       </div>
 
+      {sp.updated === '1' && <ToastOnMount message="Watch updated successfully." />}
+
       {watch.last_error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-400">
-          Last error: {watch.last_error}
+          <span className="font-medium">Last error:</span>{' '}
+          <span title={watch.last_error} className="text-balance">
+            {watch.last_error.length > 200 ? watch.last_error.slice(0, 200) + '…' : watch.last_error}
+          </span>
         </div>
       )}
 
       <div>
         <h2 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-          Recent alerts ({alerts?.length ?? 0})
+          Recent alerts ({alertsTotal ?? 0})
         </h2>
         {!alerts?.length ? (
-          <p className="text-sm text-zinc-400">No alerts yet — the worker will send matches here.</p>
+          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-zinc-300 py-12 text-center dark:border-zinc-700">
+            <span className="text-2xl">📨</span>
+            <p className="text-sm text-zinc-400">No alerts yet — the worker will send matches here.</p>
+          </div>
         ) : (
-          <div className="flex flex-col gap-2">
-            {alerts.map((alert) => {
-              const snap = Array.isArray(alert.listing_snapshots)
-                ? alert.listing_snapshots[0]
-                : alert.listing_snapshots
-              const listedDate = snap?.posted_at
-                ? new Date(snap.posted_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-                : null
-              return (
-                <div
-                  key={alert.id}
-                  className="flex items-center gap-4 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900"
-                >
-                  <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-800">
-                    {snap?.image_url ? (
-                      <Image
-                        src={snap.image_url}
-                        alt={snap.title ?? ''}
-                        width={56}
-                        height={56}
-                        className="h-full w-full object-cover"
-                        unoptimized
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-xs text-zinc-400">—</div>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                      {snap?.title ?? 'Unknown listing'}
-                    </p>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-zinc-400">
-                      {snap?.location && <span>{snap.location}</span>}
-                      {listedDate && <span>Listed {listedDate}</span>}
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1">
-                    {snap?.price != null && (
-                      <span className="text-base font-bold text-zinc-900 dark:text-zinc-50">£{snap.price}</span>
-                    )}
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-zinc-400">
-                        {new Date(alert.sent_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                      </span>
-                      {snap?.listing_url && (
-                        <a
-                          href={snap.listing_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
-                        >
-                          View →
-                        </a>
+          <>
+            <div className="flex flex-col gap-2">
+              {alerts.map((alert) => {
+                const snap = Array.isArray(alert.listing_snapshots)
+                  ? alert.listing_snapshots[0]
+                  : alert.listing_snapshots
+                const listedDate = snap?.posted_at
+                  ? new Date(snap.posted_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                  : null
+                return (
+                  <div
+                    key={alert.id}
+                    className="flex items-center gap-4 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900"
+                  >
+                    <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-800">
+                      {snap?.image_url ? (
+                        <Image
+                          src={snap.image_url}
+                          alt={snap.title ?? ''}
+                          width={56}
+                          height={56}
+                          className="h-full w-full object-cover"
+                          unoptimized
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-xs text-zinc-400">—</div>
                       )}
                     </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                        {snap?.title ?? 'Unknown listing'}
+                      </p>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-zinc-400">
+                        {snap?.location && <span>{snap.location}</span>}
+                        {listedDate && <span>Listed {listedDate}</span>}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      {snap?.price != null && (
+                        <span className="text-base font-bold text-zinc-900 dark:text-zinc-50">£{snap.price}</span>
+                      )}
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-zinc-400">
+                          {new Date(alert.sent_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                        </span>
+                        {snap?.listing_url && (
+                          <a
+                            href={snap.listing_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+                          >
+                            View →
+                          </a>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+
+            {alertsTotalPages > 1 && (
+              <div className="mt-3 flex items-center justify-center gap-2">
+                {alertsPage > 1 && (
+                  <Link
+                    href={alertsQs(alertsPage - 1)}
+                    className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                  >
+                    ← Previous
+                  </Link>
+                )}
+                <span className="text-sm text-zinc-500">Page {alertsPage} of {alertsTotalPages}</span>
+                {alertsPage < alertsTotalPages && (
+                  <Link
+                    href={alertsQs(alertsPage + 1)}
+                    className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                  >
+                    Next →
+                  </Link>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
 
-      {/* Worker run history */}
       {runs && runs.length > 0 && (
         <div>
           <h2 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
             Worker runs
           </h2>
-          <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
+          <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/50">
@@ -201,7 +262,7 @@ export default async function WatchDetailPage({ params }: { params: Promise<{ id
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
                 {runs.map(run => (
                   <tr key={run.id} className="bg-white dark:bg-zinc-900">
-                    <td className="px-4 py-2 text-zinc-500">
+                    <td className="whitespace-nowrap px-4 py-2 text-zinc-500">
                       {new Date(run.started_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     </td>
                     <td className="px-4 py-2">
@@ -213,9 +274,11 @@ export default async function WatchDetailPage({ params }: { params: Promise<{ id
                         {run.status}
                       </span>
                     </td>
-                    <td className="px-4 py-2 text-right text-zinc-600 dark:text-zinc-400">{run.listings_found}</td>
-                    <td className="px-4 py-2 text-right text-zinc-600 dark:text-zinc-400">{run.alerts_sent}</td>
-                    <td className="max-w-xs truncate px-4 py-2 text-red-500 dark:text-red-400">{run.error_message ?? ''}</td>
+                    <td className="whitespace-nowrap px-4 py-2 text-right text-zinc-600 dark:text-zinc-400">{run.listings_found}</td>
+                    <td className="whitespace-nowrap px-4 py-2 text-right text-zinc-600 dark:text-zinc-400">{run.alerts_sent}</td>
+                    <td className="max-w-40 truncate px-4 py-2 text-red-500 dark:text-red-400" title={run.error_message ?? ''}>
+                      {run.error_message ?? ''}
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { requireWorkspace } from '@/lib/auth'
 import { getSubscription, isTrialActive } from '@/lib/billing'
+import Link from 'next/link'
 
 export const metadata: Metadata = {
   title: 'Billing',
@@ -115,9 +116,18 @@ export default async function BillingPage({
         )}
 
         {isActive && (
-          <p className="text-xs text-zinc-400">
-            Subscription management coming soon.
-          </p>
+          <div className="flex flex-col gap-3">
+            <p className="text-xs text-zinc-400">
+              To cancel or change your payment method,{' '}
+              <a
+                href="mailto:support@resalewatch.com"
+                className="underline hover:text-zinc-600 dark:hover:text-zinc-300"
+              >
+                contact support
+              </a>
+              .
+            </p>
+          </div>
         )}
       </div>
     </div>

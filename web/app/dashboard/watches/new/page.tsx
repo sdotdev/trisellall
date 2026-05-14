@@ -5,6 +5,8 @@ import { fetchGuildChannels } from '@/lib/discord'
 import { adminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import Field from '@/components/Field'
+import KeywordsInput from '@/components/KeywordsInput'
 
 export const metadata: Metadata = {
   title: 'New Watch',
@@ -43,14 +45,18 @@ async function createWatch(formData: FormData) {
     .single()
 
   if (error) {
-    console.error('[createWatch] insert failed:', error.message)
-    redirect('/dashboard/watches')
+    redirect(`/dashboard/watches/new?error=${encodeURIComponent(error.message)}`)
   }
   redirect(`/dashboard/watches/${watch!.id}`)
 }
 
-export default async function NewWatchPage() {
+export default async function NewWatchPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>
+}) {
   const { workspace } = await requireWorkspace()
+  const params = await searchParams
   const { allowed, reason } = await canCreateWatch(workspace.id)
   const db = adminClient()
 
@@ -93,7 +99,13 @@ export default async function NewWatchPage() {
     <div className="flex flex-col gap-6 p-8">
       <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">New Watch</h1>
 
-      <form action={createWatch} className="flex max-w-xl flex-col gap-5">
+      {params.error && (
+        <div className="max-w-xl rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-400">
+          Failed to create watch: {params.error}
+        </div>
+      )}
+
+      <form action={createWatch} className="flex max-w-xl flex-col gap-5" noValidate>
         <Field label="Watch name" name="name" placeholder="e.g. Nike Air Max 90" required data-tour="watch-name" />
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Source</label>
@@ -114,10 +126,13 @@ export default async function NewWatchPage() {
           <Field label="Min price (£)" name="price_min" type="number" placeholder="0" />
           <Field label="Max price (£)" name="price_max" type="number" placeholder="500" />
         </div>
-        <Field label="Keywords (comma-separated)" name="keywords" placeholder="e.g. rare, og, vnds" />
-        <Field label="Excluded keywords (comma-separated)" name="excluded_keywords" placeholder="e.g. fake, replica" />
+        <KeywordsInput label="Keywords" name="keywords" placeholder="e.g. rare, og, vnds" />
+        <KeywordsInput label="Excluded keywords" name="excluded_keywords" placeholder="e.g. fake, replica" />
         <div className="flex flex-col gap-1.5" data-tour="discord-section">
-          <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Discord alert channel</label>
+          <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Discord alert channel
+            <span className="ml-1 text-xs font-normal text-zinc-400">(where matched listings are sent)</span>
+          </label>
           {channelOptions.length === 0 ? (
             <p className="text-xs text-zinc-400">
               No Discord servers connected.{' '}
@@ -137,7 +152,10 @@ export default async function NewWatchPage() {
           )}
         </div>
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Poll interval</label>
+          <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Poll interval
+            <span className="ml-1 text-xs font-normal text-zinc-400">(how often the scraper checks for new listings)</span>
+          </label>
           <select
             name="poll_interval_seconds"
             defaultValue="60"
@@ -166,34 +184,6 @@ export default async function NewWatchPage() {
           </Link>
         </div>
       </form>
-    </div>
-  )
-}
-
-function Field({
-  label, name, placeholder, required, type = 'text', 'data-tour': dataTour,
-}: {
-  label: string
-  name: string
-  placeholder?: string
-  required?: boolean
-  type?: string
-  'data-tour'?: string
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor={name} className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-        {label}
-      </label>
-      <input
-        id={name}
-        name={name}
-        type={type}
-        placeholder={placeholder}
-        required={required}
-        data-tour={dataTour}
-        className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm placeholder-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:placeholder-zinc-600"
-      />
     </div>
   )
 }

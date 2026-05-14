@@ -4,6 +4,8 @@ import { fetchGuildChannels } from '@/lib/discord'
 import { adminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
+import Field from '@/components/Field'
+import KeywordsInput from '@/components/KeywordsInput'
 
 export const metadata: Metadata = {
   title: 'Edit Watch',
@@ -16,7 +18,7 @@ async function updateWatch(watchId: string, formData: FormData) {
   const excludedKeywords = (formData.get('excluded_keywords') as string)
     .split(',').map(k => k.trim()).filter(Boolean)
 
-  await adminClient()
+  const { error } = await adminClient()
     .from('watches')
     .update({
       name: formData.get('name') as string,
@@ -33,11 +35,21 @@ async function updateWatch(watchId: string, formData: FormData) {
     })
     .eq('id', watchId)
 
-  redirect(`/dashboard/watches/${watchId}`)
+  if (error) {
+    redirect(`/dashboard/watches/${watchId}/edit?error=${encodeURIComponent(error.message)}`)
+  }
+  redirect(`/dashboard/watches/${watchId}?updated=1`)
 }
 
-export default async function EditWatchPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditWatchPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ error?: string }>
+}) {
   const { id } = await params
+  const sp = await searchParams
   const { workspace } = await requireWorkspace()
   const db = adminClient()
 
@@ -69,7 +81,13 @@ export default async function EditWatchPage({ params }: { params: Promise<{ id: 
     <div className="flex flex-col gap-6 p-8">
       <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">Edit Watch</h1>
 
-      <form action={updateWithId} className="flex max-w-xl flex-col gap-5">
+      {sp.error && (
+        <div className="max-w-xl rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-400">
+          Failed to save: {sp.error}
+        </div>
+      )}
+
+      <form action={updateWithId} className="flex max-w-xl flex-col gap-5" noValidate>
         <Field label="Watch name" name="name" defaultValue={watch.name} required />
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Source</label>
@@ -89,10 +107,13 @@ export default async function EditWatchPage({ params }: { params: Promise<{ id: 
           <Field label="Min price (£)" name="price_min" type="number" defaultValue={watch.price_min ?? ''} />
           <Field label="Max price (£)" name="price_max" type="number" defaultValue={watch.price_max ?? ''} />
         </div>
-        <Field label="Keywords (comma-separated)" name="keywords" defaultValue={watch.keywords?.join(', ') ?? ''} />
-        <Field label="Excluded keywords (comma-separated)" name="excluded_keywords" defaultValue={watch.excluded_keywords?.join(', ') ?? ''} />
+        <KeywordsInput label="Keywords" name="keywords" defaultValue={watch.keywords?.join(', ') ?? ''} />
+        <KeywordsInput label="Excluded keywords" name="excluded_keywords" defaultValue={watch.excluded_keywords?.join(', ') ?? ''} />
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Discord alert channel</label>
+          <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Discord alert channel
+            <span className="ml-1 text-xs font-normal text-zinc-400">(where matched listings are sent)</span>
+          </label>
           {channelOptions.length === 0 ? (
             <p className="text-xs text-zinc-400">
               No Discord servers connected.{' '}
@@ -112,7 +133,10 @@ export default async function EditWatchPage({ params }: { params: Promise<{ id: 
           )}
         </div>
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Poll interval</label>
+          <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Poll interval
+            <span className="ml-1 text-xs font-normal text-zinc-400">(how often the scraper checks for new listings)</span>
+          </label>
           <select
             name="poll_interval_seconds"
             defaultValue={String(watch.poll_interval_seconds)}
@@ -140,32 +164,6 @@ export default async function EditWatchPage({ params }: { params: Promise<{ id: 
           </Link>
         </div>
       </form>
-    </div>
-  )
-}
-
-function Field({
-  label, name, defaultValue, required, type = 'text',
-}: {
-  label: string
-  name: string
-  defaultValue?: string | number
-  required?: boolean
-  type?: string
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor={name} className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-        {label}
-      </label>
-      <input
-        id={name}
-        name={name}
-        type={type}
-        defaultValue={defaultValue}
-        required={required}
-        className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm placeholder-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:placeholder-zinc-600"
-      />
     </div>
   )
 }

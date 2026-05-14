@@ -3,6 +3,9 @@ import { requireWorkspace } from '@/lib/auth'
 import { adminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
+import ConfirmForm from '@/components/ConfirmForm'
+import ThemeToggle from '@/components/ThemeToggle'
 
 export const metadata: Metadata = {
   title: 'Settings',
@@ -25,7 +28,7 @@ async function updateWorkspaceName(formData: FormData) {
     .from('workspaces')
     .update({ name: formData.get('name') as string, updated_at: new Date().toISOString() })
     .eq('id', workspace.id)
-  redirect('/dashboard/settings')
+  redirect('/dashboard/settings?updated=1')
 }
 
 async function disconnectDiscord(formData: FormData) {
@@ -37,13 +40,20 @@ async function disconnectDiscord(formData: FormData) {
     .delete()
     .eq('workspace_id', workspace.id)
     .eq('guild_id', guildId)
-  redirect('/dashboard/settings')
+  redirect('/dashboard/settings?discord=disconnected')
+}
+
+async function signOut() {
+  'use server'
+  const supabase = await createClient()
+  await supabase.auth.signOut()
+  redirect('/login')
 }
 
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ discord?: string }>
+  searchParams: Promise<{ discord?: string; updated?: string }>
 }) {
   const { workspace, user } = await requireWorkspace()
   const params = await searchParams
@@ -58,9 +68,19 @@ export default async function SettingsPage({
     <div className="flex flex-col gap-8 p-8">
       <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">Settings</h1>
 
+      {params.updated === '1' && (
+        <div className="max-w-md rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400">
+          Workspace name updated.
+        </div>
+      )}
       {params.discord === 'connected' && (
         <div className="max-w-md rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400">
           Discord server connected successfully!
+        </div>
+      )}
+      {params.discord === 'disconnected' && (
+        <div className="max-w-md rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+          Discord server disconnected.
         </div>
       )}
       {params.discord === 'error' && (
@@ -96,14 +116,24 @@ export default async function SettingsPage({
 
       <section className="flex max-w-md flex-col gap-4">
         <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Account</h2>
-        <div className="flex flex-col gap-1 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <span className="text-xs text-zinc-400">Signed in as</span>
-          <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
-            {user.user_metadata?.full_name ?? user.email}
-          </span>
-          {user.email && (
-            <span className="text-xs text-zinc-400">{user.email}</span>
-          )}
+        <div className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-zinc-400">Signed in as</span>
+            <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+              {user.user_metadata?.full_name ?? user.email}
+            </span>
+            {user.email && (
+              <span className="text-xs text-zinc-400">{user.email}</span>
+            )}
+          </div>
+          <form action={signOut}>
+            <button
+              type="submit"
+              className="self-start text-sm text-red-500 underline underline-offset-4 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+            >
+              Sign out
+            </button>
+          </form>
         </div>
       </section>
 
@@ -143,7 +173,10 @@ export default async function SettingsPage({
                     Connected {new Date(inst.installed_at).toLocaleDateString()}
                   </span>
                 </div>
-                <form action={disconnectDiscord}>
+                <ConfirmForm
+                  action={disconnectDiscord}
+                  message={`Disconnect "${inst.guild_name}"? Alerts to this server will stop working.`}
+                >
                   <input type="hidden" name="guild_id" value={inst.guild_id} />
                   <button
                     type="submit"
@@ -151,12 +184,13 @@ export default async function SettingsPage({
                   >
                     Disconnect
                   </button>
-                </form>
+                </ConfirmForm>
               </div>
             ))}
           </div>
         )}
       </section>
+
       <section className="max-w-md">
         <h2 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Onboarding</h2>
         <form action={restartTour}>
@@ -167,6 +201,11 @@ export default async function SettingsPage({
             Restart setup tour
           </button>
         </form>
+      </section>
+
+      <section className="max-w-md">
+        <h2 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Appearance</h2>
+        <ThemeToggle />
       </section>
     </div>
   )
