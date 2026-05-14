@@ -78,7 +78,7 @@ export default async function WatchDetailPage({
 
   const [{ data: alerts, count: alertsTotal }, { data: runs, count: runsTotal }] = await Promise.all([
     db.from('alerts')
-      .select('id, sent_at, listing_snapshots(title, price, currency, location, listing_url, image_url, posted_at)', { count: 'exact' })
+      .select('id, sent_at, listing_snapshots(title, price, currency, location, listing_url, image_url, posted_at, source)', { count: 'exact' })
       .eq('watch_id', id)
       .order('sent_at', { ascending: false })
       .range(alertsFrom, alertsFrom + ALERTS_PER_PAGE - 1),

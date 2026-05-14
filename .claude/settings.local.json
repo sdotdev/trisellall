@@ -22,7 +22,9 @@
       "Bash(Select-Object -ExpandProperty FullName)",
       "Bash(Select-Object FullName)",
       "Bash(Sort-Object FullName)",
-      "Bash(node *)"
+      "Bash(node *)",
+      "Skill(superpowers:brainstorming)",
+      "WebFetch(domain:github.com)"
     ]
   }
 }
